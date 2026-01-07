@@ -169,6 +169,9 @@ fn worker_main(sock: &UnixDatagram) -> Result<(), Error> {
 
         client.authenticate()
             .map_err(|e| Error::Auth(format!("authentication failed: {e}")))?;
+
+        // Unlock keyring with login password
+        unlock_keyring(&user, &password);
     } else {
         // For unauthenticated sessions, just set credentials without password
         client.conversation_mut().set_credentials(&user, "");
@@ -286,5 +289,34 @@ pub fn reap_children() -> Option<(Pid, i32)> {
         Ok(WaitStatus::Exited(pid, code)) => Some((pid, code)),
         Ok(WaitStatus::Signaled(pid, _, _)) => Some((pid, 1)),
         _ => None,
+    }
+}
+
+/// Unlock the keyring daemon with the user's login password
+fn unlock_keyring(user: &str, password: &str) {
+    use keyring_protocol::{UnlockRequest, UnlockResponse, UNLOCK_SOCKET_PATH};
+    use peercred_ipc::Client;
+
+    let request = UnlockRequest {
+        user: user.to_string(),
+        password: password.to_string(),
+    };
+
+    match Client::call::<_, _, UnlockResponse>(UNLOCK_SOCKET_PATH, &request) {
+        Ok(UnlockResponse::Success) => {
+            eprintln!("greetd: keyring unlocked");
+        }
+        Ok(UnlockResponse::AlreadyUnlocked) => {
+            // Already unlocked, nothing to do
+        }
+        Ok(UnlockResponse::WrongPassword) => {
+            eprintln!("greetd: keyring password mismatch (login password differs from keyring)");
+        }
+        Ok(UnlockResponse::Error { message }) => {
+            eprintln!("greetd: keyring error: {}", message);
+        }
+        Err(_) => {
+            // Daemon not running or socket doesn't exist - silently ignore
+        }
     }
 }

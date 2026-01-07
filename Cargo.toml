@@ -11,3 +11,7 @@ nix = { version = "0.29", features = ["ioctl", "signal", "user", "fs", "mman", "
 pam = "0.8"
 thiserror = "2"
 libc = "0.2"
+
+# Keyring unlock at login
+keyring-protocol = { path = "/syncthing/Sync/Projects/system/keyring-rs/protocol" }
+peercred-ipc = { path = "/home/osso/Projects/lib/peercred-ipc" }

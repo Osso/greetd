@@ -115,23 +115,31 @@ impl Session {
 
 fn send_msg<T: Serialize>(sock: &UnixDatagram, msg: &T) -> Result<(), Error> {
     let data = serde_json::to_vec(msg).map_err(|e| Error::Other(e.to_string()))?;
-    sock.send(&data)?;
-    Ok(())
+    loop {
+        match sock.send(&data) {
+            Ok(_) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
 }
 
 fn recv_msg<T: for<'de> Deserialize<'de>>(sock: &UnixDatagram) -> Result<T, Error> {
     let mut buf = [0u8; 8192];
-    let len = sock.recv(&mut buf)?;
+    let len = loop {
+        match sock.recv(&mut buf) {
+            Ok(len) => break len,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e.into()),
+        }
+    };
     serde_json::from_slice(&buf[..len]).map_err(|e| Error::Other(e.to_string()))
 }
 
 fn worker_main(sock: &UnixDatagram) -> Result<(), Error> {
     use pam::Client;
 
-    let mut buf = [0u8; 8192];
-    let len = sock.recv(&mut buf)?;
-    let req: WorkerRequest = serde_json::from_slice(&buf[..len])
-        .map_err(|e| Error::Other(e.to_string()))?;
+    let req: WorkerRequest = recv_msg(sock)?;
 
     let (service, class, user, authenticate, tty, source_profile, greetd_sock) = match req {
         WorkerRequest::Initiate { service, class, user, authenticate, tty, source_profile, greetd_sock } => {
@@ -154,9 +162,7 @@ fn worker_main(sock: &UnixDatagram) -> Result<(), Error> {
         })?;
 
         // Get response
-        let len = sock.recv(&mut buf)?;
-        let resp: WorkerRequest = serde_json::from_slice(&buf[..len])
-            .map_err(|e| Error::Other(e.to_string()))?;
+        let resp: WorkerRequest = recv_msg(sock)?;
 
         let password = match resp {
             WorkerRequest::AuthResponse(Some(p)) => p,
@@ -171,18 +177,20 @@ fn worker_main(sock: &UnixDatagram) -> Result<(), Error> {
             .map_err(|e| Error::Auth(format!("authentication failed: {e}")))?;
 
         // Unlock keyring with login password
+        #[cfg(feature = "keyring")]
         unlock_keyring(&user, &password);
     } else {
-        // For unauthenticated sessions, just set credentials without password
+        // For unauthenticated sessions, still need to call authenticate()
+        // PAM requires authentication before open_session() works
         client.conversation_mut().set_credentials(&user, "");
+        client.authenticate()
+            .map_err(|e| Error::Auth(format!("authentication failed: {e}")))?;
     }
 
     send_msg(sock, &WorkerResponse::Ready)?;
 
     // Wait for start command
-    let len = sock.recv(&mut buf)?;
-    let req: WorkerRequest = serde_json::from_slice(&buf[..len])
-        .map_err(|e| Error::Other(e.to_string()))?;
+    let req: WorkerRequest = recv_msg(sock)?;
 
     let (cmd, env) = match req {
         WorkerRequest::Start { cmd, env } => (cmd, env),
@@ -293,6 +301,7 @@ pub fn reap_children() -> Option<(Pid, i32)> {
 }
 
 /// Unlock the keyring daemon with the user's login password
+#[cfg(feature = "keyring")]
 fn unlock_keyring(user: &str, password: &str) {
     use keyring_protocol::{UnlockRequest, UnlockResponse, UNLOCK_SOCKET_PATH};
     use peercred_ipc::Client;

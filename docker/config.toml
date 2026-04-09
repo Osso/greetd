@@ -1,0 +1,9 @@
+[terminal]
+vt = "none"
+
+[general]
+source_profile = false
+
+[default_session]
+command = "test-greeter testuser testpass /bin/true"
+user = "greeter"

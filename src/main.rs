@@ -89,6 +89,7 @@ fn run() -> Result<(), Error> {
     fs::write(&config.runfile, "")?;
 
     // Start greeter
+    eprintln!("greetd: starting greeter: {} (pam={}, user={})", config.greeter_command, greeter_pam_service, config.greeter_user);
     let mut greeter = start_session_direct(
         &greeter_pam_service,
         SessionClass::Greeter,
@@ -98,6 +99,7 @@ fn run() -> Result<(), Error> {
         config.source_profile,
         &sock_path,
     )?;
+    eprintln!("greetd: greeter started, pid={}", greeter.pid());
 
     // Main loop state
     let mut pending_session: Option<Session> = None;
@@ -344,8 +346,9 @@ fn handle_client(
             Request::StartSession { cmd, env } => {
                 match session.take() {
                     Some(mut s) => {
-                        match s.start(cmd, env) {
+                        match s.start(cmd.clone(), env) {
                             Ok(_) => {
+                                eprintln!("greetd: session started: {}", cmd.join(" "));
                                 *pending_session = Some(s);
                                 *pending_since = Some(Instant::now());
                                 *sent_term = false;

@@ -44,10 +44,18 @@ struct SessionSection {
     service: Option<String>,
 }
 
-fn default_true() -> bool { true }
-fn default_runfile() -> String { "/run/greetd.run".into() }
-fn default_service() -> String { "greetd".into() }
-fn default_greeter_user() -> String { "greeter".into() }
+fn default_true() -> bool {
+    true
+}
+fn default_runfile() -> String {
+    "/run/greetd.run".into()
+}
+fn default_service() -> String {
+    "greetd".into()
+}
+fn default_greeter_user() -> String {
+    "greeter".into()
+}
 
 #[derive(Debug)]
 pub struct Config {
@@ -87,7 +95,9 @@ impl Config {
             service: default_service(),
         });
 
-        let greeter_service = file.default_session.service
+        let greeter_service = file
+            .default_session
+            .service
             .unwrap_or_else(|| "greetd-greeter".into());
 
         let initial_session = file.initial_session.map(|s| InitialSession {
@@ -128,13 +138,16 @@ mod tests {
 
     #[test]
     fn minimal_config() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = 1
 
 [default_session]
 command = "agreety"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(matches!(config.vt, VtSelection::Specific(1)));
         assert!(config.switch);
@@ -149,65 +162,79 @@ command = "agreety"
 
     #[test]
     fn vt_selection_none() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = "none"
 
 [default_session]
 command = "test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(matches!(config.vt, VtSelection::None));
     }
 
     #[test]
     fn vt_selection_current() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = "current"
 
 [default_session]
 command = "test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(matches!(config.vt, VtSelection::Current));
     }
 
     #[test]
     fn vt_selection_next() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = "next"
 
 [default_session]
 command = "test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(matches!(config.vt, VtSelection::Next));
     }
 
     #[test]
     fn vt_selection_specific() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = 7
 
 [default_session]
 command = "test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(matches!(config.vt, VtSelection::Specific(7)));
     }
 
     #[test]
     fn invalid_vt_string() {
-        let result = Config::parse(r#"
+        let result = Config::parse(
+            r#"
 [terminal]
 vt = "invalid"
 
 [default_session]
 command = "test"
-"#);
+"#,
+        );
 
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
@@ -216,21 +243,25 @@ command = "test"
 
     #[test]
     fn switch_disabled() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = 1
 switch = false
 
 [default_session]
 command = "test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(!config.switch);
     }
 
     #[test]
     fn custom_general_section() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = 1
 
@@ -241,7 +272,9 @@ service = "custom-pam"
 
 [default_session]
 command = "test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert!(!config.source_profile);
         assert_eq!(config.runfile, "/custom/path");
@@ -250,7 +283,8 @@ command = "test"
 
     #[test]
     fn custom_session_user_and_service() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = 1
 
@@ -258,7 +292,9 @@ vt = 1
 command = "my-greeter"
 user = "custom-user"
 service = "custom-greeter-pam"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         assert_eq!(config.greeter_command, "my-greeter");
         assert_eq!(config.greeter_user, "custom-user");
@@ -267,7 +303,8 @@ service = "custom-greeter-pam"
 
     #[test]
     fn initial_session() {
-        let config = Config::parse(r#"
+        let config = Config::parse(
+            r#"
 [terminal]
 vt = 1
 
@@ -277,7 +314,9 @@ command = "greeter"
 [initial_session]
 command = "sway"
 user = "john"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let initial = config.initial_session.unwrap();
         assert_eq!(initial.command, "sway");
@@ -286,33 +325,39 @@ user = "john"
 
     #[test]
     fn missing_terminal_section() {
-        let result = Config::parse(r#"
+        let result = Config::parse(
+            r#"
 [default_session]
 command = "test"
-"#);
+"#,
+        );
 
         assert!(result.is_err());
     }
 
     #[test]
     fn missing_default_session() {
-        let result = Config::parse(r#"
+        let result = Config::parse(
+            r#"
 [terminal]
 vt = 1
-"#);
+"#,
+        );
 
         assert!(result.is_err());
     }
 
     #[test]
     fn missing_command() {
-        let result = Config::parse(r#"
+        let result = Config::parse(
+            r#"
 [terminal]
 vt = 1
 
 [default_session]
 user = "greeter"
-"#);
+"#,
+        );
 
         assert!(result.is_err());
     }

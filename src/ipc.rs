@@ -7,9 +7,17 @@ use crate::error::Error;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Request {
-    CreateSession { username: String },
-    PostAuthMessageResponse { response: Option<String> },
-    StartSession { cmd: Vec<String>, #[serde(default)] env: Vec<String> },
+    CreateSession {
+        username: String,
+    },
+    PostAuthMessageResponse {
+        response: Option<String>,
+    },
+    StartSession {
+        cmd: Vec<String>,
+        #[serde(default)]
+        env: Vec<String>,
+    },
     CancelSession,
 }
 
@@ -17,8 +25,14 @@ pub enum Request {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Response {
     Success,
-    Error { error_type: ErrorType, description: String },
-    AuthMessage { auth_message_type: AuthMessageType, auth_message: String },
+    Error {
+        error_type: ErrorType,
+        description: String,
+    },
+    AuthMessage {
+        auth_message_type: AuthMessageType,
+        auth_message: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -81,23 +95,33 @@ mod tests {
 
     #[test]
     fn request_create_session_serialization() {
-        let req = Request::CreateSession { username: "bob".into() };
+        let req = Request::CreateSession {
+            username: "bob".into(),
+        };
         let json = serde_json::to_string(&req).unwrap();
         assert_eq!(json, r#"{"type":"create_session","username":"bob"}"#);
     }
 
     #[test]
     fn request_post_auth_response_serialization() {
-        let req = Request::PostAuthMessageResponse { response: Some("password".into()) };
+        let req = Request::PostAuthMessageResponse {
+            response: Some("password".into()),
+        };
         let json = serde_json::to_string(&req).unwrap();
-        assert_eq!(json, r#"{"type":"post_auth_message_response","response":"password"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"post_auth_message_response","response":"password"}"#
+        );
     }
 
     #[test]
     fn request_post_auth_response_none() {
         let req = Request::PostAuthMessageResponse { response: None };
         let json = serde_json::to_string(&req).unwrap();
-        assert_eq!(json, r#"{"type":"post_auth_message_response","response":null}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"post_auth_message_response","response":null}"#
+        );
     }
 
     #[test]
@@ -107,7 +131,10 @@ mod tests {
             env: vec!["WAYLAND_DISPLAY=wayland-1".into()],
         };
         let json = serde_json::to_string(&req).unwrap();
-        assert_eq!(json, r#"{"type":"start_session","cmd":["sway"],"env":["WAYLAND_DISPLAY=wayland-1"]}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"start_session","cmd":["sway"],"env":["WAYLAND_DISPLAY=wayland-1"]}"#
+        );
     }
 
     #[test]
@@ -141,7 +168,10 @@ mod tests {
             description: "something went wrong".into(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert_eq!(json, r#"{"type":"error","error_type":"error","description":"something went wrong"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"error","error_type":"error","description":"something went wrong"}"#
+        );
     }
 
     #[test]
@@ -151,7 +181,10 @@ mod tests {
             description: "bad password".into(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert_eq!(json, r#"{"type":"error","error_type":"auth_error","description":"bad password"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"error","error_type":"auth_error","description":"bad password"}"#
+        );
     }
 
     #[test]
@@ -161,7 +194,10 @@ mod tests {
             auth_message: "Password:".into(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert_eq!(json, r#"{"type":"auth_message","auth_message_type":"secret","auth_message":"Password:"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"auth_message","auth_message_type":"secret","auth_message":"Password:"}"#
+        );
     }
 
     #[test]
@@ -171,7 +207,10 @@ mod tests {
             auth_message: "Username:".into(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert_eq!(json, r#"{"type":"auth_message","auth_message_type":"visible","auth_message":"Username:"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"auth_message","auth_message_type":"visible","auth_message":"Username:"}"#
+        );
     }
 
     #[test]
@@ -181,7 +220,10 @@ mod tests {
             auth_message: "Welcome!".into(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert_eq!(json, r#"{"type":"auth_message","auth_message_type":"info","auth_message":"Welcome!"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"auth_message","auth_message_type":"info","auth_message":"Welcome!"}"#
+        );
     }
 
     #[test]
@@ -191,7 +233,10 @@ mod tests {
             auth_message: "Account locked".into(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert_eq!(json, r#"{"type":"auth_message","auth_message_type":"error","auth_message":"Account locked"}"#);
+        assert_eq!(
+            json,
+            r#"{"type":"auth_message","auth_message_type":"error","auth_message":"Account locked"}"#
+        );
     }
 
     #[test]
@@ -222,7 +267,10 @@ mod tests {
     fn response_error_helper() {
         let resp = Response::error("test error");
         match resp {
-            Response::Error { error_type, description } => {
+            Response::Error {
+                error_type,
+                description,
+            } => {
                 assert!(matches!(error_type, ErrorType::Error));
                 assert_eq!(description, "test error");
             }
@@ -252,7 +300,10 @@ mod tests {
 
         let received: Response = serde_json::from_slice(&buf).unwrap();
         match received {
-            Response::AuthMessage { auth_message_type, auth_message } => {
+            Response::AuthMessage {
+                auth_message_type,
+                auth_message,
+            } => {
                 assert!(matches!(auth_message_type, AuthMessageType::Secret));
                 assert_eq!(auth_message, "Password:");
             }
@@ -267,7 +318,9 @@ mod tests {
         let (mut client, mut server) = UnixStream::pair().unwrap();
 
         // Simulate greeter sending a request
-        let req = Request::CreateSession { username: "testuser".into() };
+        let req = Request::CreateSession {
+            username: "testuser".into(),
+        };
         let json = serde_json::to_vec(&req).unwrap();
         let len = (json.len() as u32).to_ne_bytes();
         std::io::Write::write_all(&mut client, &len).unwrap();

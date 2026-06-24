@@ -22,7 +22,7 @@ libc = "0.2"
 
 # Keyring unlock at login (optional, for local builds)
 keyring-protocol = { path = "/syncthing/Sync/Projects/system/keyring-rs/protocol", optional = true }
-peercred-ipc = { path = "/home/osso/Projects/lib/peercred-ipc", optional = true }
+peercred-ipc = { path = "/syncthing/Sync/Projects/lib/peercred-ipc", optional = true }
 
 [features]
 default = ["keyring"]

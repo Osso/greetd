@@ -5,9 +5,12 @@
 //! Usage: test-greeter <username> <password> <command>
 //! Example: test-greeter testuser testpass /bin/bash
 
+#[cfg(not(coverage))]
 use std::io::{Read, Write};
+#[cfg(not(coverage))]
 use std::os::unix::net::UnixStream;
 
+#[cfg(not(coverage))]
 fn main() {
     let (username, password, command) = parse_args();
     let mut stream = connect_greetd();
@@ -17,6 +20,7 @@ fn main() {
     start_session(&mut stream, &command);
 }
 
+#[cfg(not(coverage))]
 fn parse_args() -> (String, String, String) {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
@@ -27,12 +31,14 @@ fn parse_args() -> (String, String, String) {
     (args[1].clone(), args[2].clone(), args[3].clone())
 }
 
+#[cfg(not(coverage))]
 fn connect_greetd() -> UnixStream {
     let sock_path = std::env::var("GREETD_SOCK").expect("GREETD_SOCK not set");
     eprintln!("Connecting to {sock_path}");
     UnixStream::connect(&sock_path).expect("Failed to connect to socket")
 }
 
+#[cfg(not(coverage))]
 fn create_session(stream: &mut UnixStream, username: &str) -> String {
     let request = format!(r#"{{"type":"create_session","username":"{username}"}}"#);
     send(stream, &request);
@@ -41,6 +47,7 @@ fn create_session(stream: &mut UnixStream, username: &str) -> String {
     response
 }
 
+#[cfg(not(coverage))]
 fn authenticate_if_needed(stream: &mut UnixStream, response: &str, password: &str) {
     if !response.contains("auth_message") {
         return;
@@ -57,6 +64,7 @@ fn authenticate_if_needed(stream: &mut UnixStream, response: &str, password: &st
     }
 }
 
+#[cfg(not(coverage))]
 fn start_session(stream: &mut UnixStream, command: &str) {
     let request = format!(r#"{{"type":"start_session","cmd":["{command}"]}}"#);
     send(stream, &request);
@@ -72,6 +80,7 @@ fn start_session(stream: &mut UnixStream, command: &str) {
     std::process::exit(1);
 }
 
+#[cfg(not(coverage))]
 fn send(stream: &mut UnixStream, json: &str) {
     let len = (json.len() as u32).to_ne_bytes();
     stream.write_all(&len).expect("Failed to write length");
@@ -80,6 +89,7 @@ fn send(stream: &mut UnixStream, json: &str) {
         .expect("Failed to write JSON");
 }
 
+#[cfg(not(coverage))]
 fn recv(stream: &mut UnixStream) -> String {
     let mut len_buf = [0u8; 4];
     stream

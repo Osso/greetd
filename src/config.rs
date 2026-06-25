@@ -361,4 +361,53 @@ user = "greeter"
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn load_reads_config_file() {
+        let path =
+            std::env::temp_dir().join(format!("greetd-config-test-{}.toml", std::process::id()));
+        std::fs::write(
+            &path,
+            r#"
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet"
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load(path.to_str().unwrap()).unwrap();
+
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(config.greeter_command, "tuigreet");
+    }
+
+    #[test]
+    fn load_reports_missing_file_path() {
+        let path = "/tmp/greetd-config-test-does-not-exist.toml";
+
+        let error = Config::load(path).unwrap_err().to_string();
+
+        assert!(error.contains("failed to read"));
+        assert!(error.contains(path));
+    }
+
+    #[test]
+    fn invalid_vt_type() {
+        let result = Config::parse(
+            r#"
+[terminal]
+vt = true
+
+[default_session]
+command = "test"
+"#,
+        );
+
+        let error = result.unwrap_err().to_string();
+
+        assert!(error.contains("vt must be string or integer"));
+    }
 }

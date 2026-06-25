@@ -344,4 +344,34 @@ mod tests {
         let result = Request::read_from(&mut server).unwrap();
         assert!(result.is_none());
     }
+
+    #[test]
+    fn request_read_from_invalid_json() {
+        use std::os::unix::net::UnixStream;
+
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        let json = b"{not-json";
+        let len = (json.len() as u32).to_ne_bytes();
+        std::io::Write::write_all(&mut client, &len).unwrap();
+        std::io::Write::write_all(&mut client, json).unwrap();
+
+        let error = Request::read_from(&mut server).unwrap_err().to_string();
+
+        assert!(error.contains("failed to parse request"));
+    }
+
+    #[test]
+    fn request_read_from_truncated_body() {
+        use std::os::unix::net::UnixStream;
+
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        let len = 10u32.to_ne_bytes();
+        std::io::Write::write_all(&mut client, &len).unwrap();
+        std::io::Write::write_all(&mut client, b"short").unwrap();
+        drop(client);
+
+        let error = Request::read_from(&mut server).unwrap_err().to_string();
+
+        assert!(error.contains("failed to fill whole buffer"));
+    }
 }

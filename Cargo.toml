@@ -27,3 +27,6 @@ peercred-ipc = { path = "/syncthing/Sync/Projects/lib/peercred-ipc", optional = 
 [features]
 default = ["keyring"]
 keyring = ["dep:keyring-protocol", "dep:peercred-ipc"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }

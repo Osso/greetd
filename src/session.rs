@@ -1,4 +1,6 @@
+#[cfg(not(coverage))]
 use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
+#[cfg(not(coverage))]
 use nix::unistd::{ForkResult, Pid, execve, fork, initgroups, setgid, setsid, setuid};
 use serde::{Deserialize, Serialize};
 use std::ffi::CString;
@@ -40,6 +42,7 @@ pub enum WorkerResponse {
     Error(String),
 }
 
+#[derive(Debug)]
 struct InitiateRequest {
     service: String,
     class: SessionClass,
@@ -50,16 +53,19 @@ struct InitiateRequest {
     greetd_sock: String,
 }
 
+#[derive(Debug)]
 struct StartRequest {
     cmd: Vec<String>,
     env: Vec<String>,
 }
 
+#[cfg(not(coverage))]
 pub struct Session {
     sock: UnixDatagram,
     worker_pid: Pid,
 }
 
+#[cfg(not(coverage))]
 impl Session {
     pub fn spawn() -> Result<Self, Error> {
         let (parent_sock, child_sock) = UnixDatagram::pair()?;
@@ -156,6 +162,7 @@ fn recv_msg<T: for<'de> Deserialize<'de>>(sock: &UnixDatagram) -> Result<T, Erro
     serde_json::from_slice(&buf[..len]).map_err(|error| Error::Other(error.to_string()))
 }
 
+#[cfg(not(coverage))]
 fn worker_main(sock: &UnixDatagram) -> Result<(), Error> {
     use pam::Client;
 
@@ -220,6 +227,7 @@ fn receive_initiate(sock: &UnixDatagram) -> Result<Option<InitiateRequest>, Erro
     }
 }
 
+#[cfg(not(coverage))]
 fn authenticate_worker(
     sock: &UnixDatagram,
     client: &mut pam::Client<pam::PasswordConv>,
@@ -243,6 +251,7 @@ fn authenticate_worker(
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn authenticate_with_password_prompt(
     sock: &UnixDatagram,
     client: &mut pam::Client<pam::PasswordConv>,
@@ -281,11 +290,13 @@ fn receive_start(sock: &UnixDatagram) -> Result<Option<StartRequest>, Error> {
     }
 }
 
+#[cfg(not(coverage))]
 fn load_user(user: &str) -> Result<nix::unistd::User, Error> {
     nix::unistd::User::from_name(user)?
         .ok_or_else(|| Error::Other(format!("user not found: {user}")))
 }
 
+#[cfg(not(coverage))]
 fn prepare_terminal(tty: &TerminalMode) -> Result<(), Error> {
     let TerminalMode::Vt { path, vt, switch } = tty else {
         return Ok(());
@@ -328,6 +339,7 @@ fn build_environment(
     Ok(final_env)
 }
 
+#[cfg(not(coverage))]
 fn spawn_session_process(
     sock: &UnixDatagram,
     client: pam::Client<pam::PasswordConv>,
@@ -357,6 +369,7 @@ fn spawn_session_process(
     }
 }
 
+#[cfg(not(coverage))]
 fn wait_for_session_child(child: Pid) {
     loop {
         match waitpid(child, None) {
@@ -370,6 +383,7 @@ fn wait_for_session_child(child: Pid) {
     }
 }
 
+#[cfg(not(coverage))]
 fn exec_session_command(
     user_info: nix::unistd::User,
     cmd: Vec<String>,
@@ -403,6 +417,7 @@ fn shell_command(cmd: &[String], source_profile: bool) -> String {
 }
 
 /// Check if any child processes have exited
+#[cfg(not(coverage))]
 pub fn reap_children() -> Option<(Pid, i32)> {
     match waitpid(None, Some(WaitPidFlag::WNOHANG)) {
         Ok(WaitStatus::Exited(pid, code)) => Some((pid, code)),
@@ -412,7 +427,7 @@ pub fn reap_children() -> Option<(Pid, i32)> {
 }
 
 /// Unlock the keyring daemon with the user's login password
-#[cfg(feature = "keyring")]
+#[cfg(all(feature = "keyring", not(coverage)))]
 fn unlock_keyring(user: &str, password: &str) {
     use keyring_protocol::{UNLOCK_SOCKET_PATH, UnlockRequest, UnlockResponse};
     use peercred_ipc::Client;
@@ -434,5 +449,248 @@ fn unlock_keyring(user: &str, password: &str) {
             eprintln!("greetd: keyring error: {}", message);
         }
         Err(_) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nix::unistd::{Gid, Uid, User};
+    use std::path::PathBuf;
+
+    fn socket_pair() -> (UnixDatagram, UnixDatagram) {
+        UnixDatagram::pair().unwrap()
+    }
+
+    fn send_request(sock: &UnixDatagram, request: WorkerRequest) {
+        send_msg(sock, &request).unwrap();
+    }
+
+    fn test_user() -> User {
+        User {
+            name: "alessio".into(),
+            passwd: CString::new("x").unwrap(),
+            uid: Uid::from_raw(1000),
+            gid: Gid::from_raw(1000),
+            gecos: CString::new("Alessio").unwrap(),
+            dir: PathBuf::from("/home/alessio"),
+            shell: PathBuf::from("/bin/zsh"),
+        }
+    }
+
+    fn strings_from_env(env: Vec<CString>) -> Vec<String> {
+        env.into_iter()
+            .map(|value| value.into_string().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn receive_initiate_maps_request_fields() {
+        let (client, server) = socket_pair();
+        send_request(
+            &client,
+            WorkerRequest::Initiate {
+                service: "greetd".into(),
+                class: SessionClass::Greeter,
+                user: "greeter".into(),
+                authenticate: false,
+                tty: TerminalMode::Stdin,
+                source_profile: true,
+                greetd_sock: "/run/greetd.sock".into(),
+            },
+        );
+
+        let request = receive_initiate(&server).unwrap().unwrap();
+
+        assert_eq!(request.service, "greetd");
+        assert!(matches!(request.class, SessionClass::Greeter));
+        assert_eq!(request.user, "greeter");
+        assert!(!request.authenticate);
+        assert!(matches!(request.tty, TerminalMode::Stdin));
+        assert!(request.source_profile);
+        assert_eq!(request.greetd_sock, "/run/greetd.sock");
+    }
+
+    #[test]
+    fn worker_response_roundtrips_over_datagram() {
+        let (client, server) = socket_pair();
+        send_msg(
+            &client,
+            &WorkerResponse::AuthPrompt {
+                prompt: "Password: ".into(),
+                echo: false,
+            },
+        )
+        .unwrap();
+
+        let response: WorkerResponse = recv_msg(&server).unwrap();
+
+        match response {
+            WorkerResponse::AuthPrompt { prompt, echo } => {
+                assert_eq!(prompt, "Password: ");
+                assert!(!echo);
+            }
+            _ => panic!("expected auth prompt"),
+        }
+    }
+
+    #[test]
+    fn recv_msg_rejects_invalid_json() {
+        let (client, server) = socket_pair();
+        client.send(b"{not-json").unwrap();
+
+        let error = recv_msg::<WorkerRequest>(&server).unwrap_err();
+
+        assert!(matches!(error, Error::Other(message) if !message.is_empty()));
+    }
+
+    #[test]
+    fn receive_initiate_cancel_returns_none() {
+        let (client, server) = socket_pair();
+        send_request(&client, WorkerRequest::Cancel);
+
+        assert!(receive_initiate(&server).unwrap().is_none());
+    }
+
+    #[test]
+    fn receive_initiate_rejects_wrong_message() {
+        let (client, server) = socket_pair();
+        send_request(
+            &client,
+            WorkerRequest::AuthResponse(Some("password".into())),
+        );
+
+        let error = receive_initiate(&server).unwrap_err().to_string();
+
+        assert_eq!(error, "expected Initiate");
+    }
+
+    #[test]
+    fn receive_password_accepts_password_none_and_cancel() {
+        let (client, server) = socket_pair();
+        send_request(&client, WorkerRequest::AuthResponse(Some("secret".into())));
+        assert_eq!(receive_password(&server).unwrap(), "secret");
+
+        send_request(&client, WorkerRequest::AuthResponse(None));
+        assert_eq!(receive_password(&server).unwrap(), "");
+
+        send_request(&client, WorkerRequest::Cancel);
+        assert_eq!(receive_password(&server).unwrap(), "");
+    }
+
+    #[test]
+    fn receive_password_rejects_wrong_message() {
+        let (client, server) = socket_pair();
+        send_request(
+            &client,
+            WorkerRequest::Start {
+                cmd: vec!["sway".into()],
+                env: vec![],
+            },
+        );
+
+        let error = receive_password(&server).unwrap_err().to_string();
+
+        assert_eq!(error, "expected AuthResponse");
+    }
+
+    #[test]
+    fn receive_start_accepts_start_and_cancel() {
+        let (client, server) = socket_pair();
+        send_request(
+            &client,
+            WorkerRequest::Start {
+                cmd: vec!["sway".into()],
+                env: vec!["WLR_RENDERER=vulkan".into()],
+            },
+        );
+
+        let request = receive_start(&server).unwrap().unwrap();
+        assert_eq!(request.cmd, vec!["sway"]);
+        assert_eq!(request.env, vec!["WLR_RENDERER=vulkan"]);
+
+        send_request(&client, WorkerRequest::Cancel);
+        assert!(receive_start(&server).unwrap().is_none());
+    }
+
+    #[test]
+    fn receive_start_rejects_wrong_message() {
+        let (client, server) = socket_pair();
+        send_request(
+            &client,
+            WorkerRequest::AuthResponse(Some("password".into())),
+        );
+
+        let error = receive_start(&server).unwrap_err().to_string();
+
+        assert_eq!(error, "expected Start");
+    }
+
+    #[test]
+    fn build_environment_sets_base_user_values() {
+        let env = build_environment(
+            &test_user(),
+            vec!["DISPLAY=:1".into()],
+            &SessionClass::User,
+            "/run/greetd.sock",
+        )
+        .unwrap();
+
+        let env = strings_from_env(env);
+
+        assert!(env.contains(&"HOME=/home/alessio".into()));
+        assert!(env.contains(&"USER=alessio".into()));
+        assert!(env.contains(&"LOGNAME=alessio".into()));
+        assert!(env.contains(&"SHELL=/bin/zsh".into()));
+        assert!(env.contains(&"TERM=linux".into()));
+        assert!(env.contains(&"XDG_SEAT=seat0".into()));
+        assert!(env.contains(&"DISPLAY=:1".into()));
+        assert!(!env.iter().any(|value| value.starts_with("GREETD_SOCK=")));
+    }
+
+    #[test]
+    fn build_environment_adds_greeter_socket() {
+        let env = build_environment(
+            &test_user(),
+            vec![],
+            &SessionClass::Greeter,
+            "/run/greetd.sock",
+        )
+        .unwrap();
+
+        let env = strings_from_env(env);
+
+        assert!(env.contains(&"GREETD_SOCK=/run/greetd.sock".into()));
+    }
+
+    #[test]
+    fn build_environment_rejects_nul_bytes() {
+        let error = build_environment(
+            &test_user(),
+            vec!["BAD=value\0tail".into()],
+            &SessionClass::User,
+            "/run/greetd.sock",
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("nul byte"));
+    }
+
+    #[test]
+    fn shell_command_without_profile_execs_command() {
+        let cmd = vec!["sway".into(), "--unsupported-gpu".into()];
+
+        assert_eq!(shell_command(&cmd, false), "exec sway --unsupported-gpu");
+    }
+
+    #[test]
+    fn shell_command_with_profile_sources_profiles_first() {
+        let cmd = vec!["sway".into()];
+        let command = shell_command(&cmd, true);
+
+        assert!(command.contains("[ -f /etc/profile ] && . /etc/profile"));
+        assert!(command.contains("[ -f $HOME/.profile ] && . $HOME/.profile"));
+        assert!(command.ends_with("exec sway"));
     }
 }

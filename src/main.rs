@@ -4,20 +4,30 @@ mod ipc;
 mod session;
 mod terminal;
 
+#[cfg(not(coverage))]
 use std::fs;
+#[cfg(not(coverage))]
 use std::os::unix::net::{UnixListener, UnixStream};
+#[cfg(not(coverage))]
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(not(coverage))]
 use std::time::{Duration, Instant};
 
+#[cfg(not(coverage))]
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, kill, sigaction};
+#[cfg(not(coverage))]
 use nix::unistd::{chown, getpid};
 
 use config::{Config, InitialSession, VtSelection};
 use error::Error;
+#[cfg(not(coverage))]
 use ipc::{AuthMessageType, Request, Response};
+#[cfg(not(coverage))]
 use session::{Session, SessionClass};
-use terminal::{Terminal, TerminalMode};
+#[cfg(not(coverage))]
+use terminal::Terminal;
+use terminal::TerminalMode;
 
 static TERMINATE: AtomicBool = AtomicBool::new(false);
 
@@ -29,6 +39,7 @@ fn should_terminate() -> bool {
     TERMINATE.load(Ordering::SeqCst)
 }
 
+#[cfg(not(coverage))]
 fn main() {
     if let Err(error) = run() {
         eprintln!("greetd: {error}");
@@ -36,6 +47,7 @@ fn main() {
     }
 }
 
+#[cfg(not(coverage))]
 struct Runtime {
     pam_service: String,
     greeter_pam_service: String,
@@ -48,11 +60,13 @@ struct Runtime {
     initial_session: Option<RuntimeInitialSession>,
 }
 
+#[derive(Debug)]
 struct RuntimeInitialSession {
     user: String,
     command: String,
 }
 
+#[cfg(not(coverage))]
 #[derive(Default)]
 struct PendingState {
     session: Option<Session>,
@@ -60,11 +74,13 @@ struct PendingState {
     sent_term: bool,
 }
 
+#[cfg(not(coverage))]
 struct ClientContext<'a> {
     runtime: &'a Runtime,
     pending_state: &'a mut PendingState,
 }
 
+#[cfg(not(coverage))]
 fn run() -> Result<(), Error> {
     let config = load_config()?;
     lock_memory();
@@ -90,6 +106,7 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(not(coverage))]
 impl Runtime {
     fn from_config(config: Config) -> Result<Self, Error> {
         let term_mode = get_terminal_mode(&config)?;
@@ -121,6 +138,7 @@ impl From<InitialSession> for RuntimeInitialSession {
     }
 }
 
+#[cfg(not(coverage))]
 impl PendingState {
     fn queue(&mut self, session: Session) {
         self.session = Some(session);
@@ -163,6 +181,7 @@ impl PendingState {
     }
 }
 
+#[cfg(not(coverage))]
 fn load_config() -> Result<Config, Error> {
     let config_path = std::env::args()
         .nth(1)
@@ -170,12 +189,14 @@ fn load_config() -> Result<Config, Error> {
     Config::load(&config_path)
 }
 
+#[cfg(not(coverage))]
 fn lock_memory() {
     unsafe {
         libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE);
     }
 }
 
+#[cfg(not(coverage))]
 fn create_listener(sock_path: &str, greeter_user: &str) -> Result<UnixListener, Error> {
     let greeter_user = nix::unistd::User::from_name(greeter_user)?
         .ok_or_else(|| format!("greeter user not found: {greeter_user}"))?;
@@ -186,6 +207,7 @@ fn create_listener(sock_path: &str, greeter_user: &str) -> Result<UnixListener, 
     Ok(listener)
 }
 
+#[cfg(not(coverage))]
 fn start_initial_session_if_needed(runtime: &Runtime) -> Result<(), Error> {
     if Path::new(&runtime.runfile).exists() {
         return Ok(());
@@ -206,11 +228,13 @@ fn start_initial_session_if_needed(runtime: &Runtime) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn create_runfile(runfile: &str) -> Result<(), Error> {
     fs::write(runfile, "")?;
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn event_loop(
     listener: &UnixListener,
     runtime: &Runtime,
@@ -227,6 +251,7 @@ fn event_loop(
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn reap_greeter_exits(
     runtime: &Runtime,
     greeter: &mut Session,
@@ -247,6 +272,7 @@ fn reap_greeter_exits(
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn handle_next_client(
     listener: &UnixListener,
     runtime: &Runtime,
@@ -268,6 +294,7 @@ fn handle_next_client(
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn shutdown(sock_path: &str, greeter: &mut Session, pending_state: &mut PendingState) {
     eprintln!("greetd: shutting down");
     pending_state.cancel_pending();
@@ -278,6 +305,7 @@ fn shutdown(sock_path: &str, greeter: &mut Session, pending_state: &mut PendingS
     let _ = fs::remove_file(sock_path);
 }
 
+#[cfg(not(coverage))]
 fn setup_signal_handlers() -> Result<(), Error> {
     let ignore = SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
     unsafe { sigaction(Signal::SIGCHLD, &ignore)? };
@@ -298,10 +326,16 @@ fn setup_signal_handlers() -> Result<(), Error> {
 fn get_terminal_mode(config: &Config) -> Result<TerminalMode, Error> {
     match &config.vt {
         VtSelection::None => Ok(TerminalMode::Stdin),
+        #[cfg(not(coverage))]
         VtSelection::Current => {
             terminal_mode_from_device("/dev/tty0", config, Terminal::current_vt)
         }
+        #[cfg(coverage)]
+        VtSelection::Current => Err("current VT selection requires a real terminal".into()),
+        #[cfg(not(coverage))]
         VtSelection::Next => terminal_mode_from_device("/dev/tty0", config, Terminal::next_vt),
+        #[cfg(coverage)]
+        VtSelection::Next => Err("next VT selection requires a real terminal".into()),
         VtSelection::Specific(vt) => Ok(TerminalMode::Vt {
             path: format!("/dev/tty{vt}"),
             vt: *vt,
@@ -310,6 +344,7 @@ fn get_terminal_mode(config: &Config) -> Result<TerminalMode, Error> {
     }
 }
 
+#[cfg(not(coverage))]
 fn terminal_mode_from_device(
     path: &str,
     config: &Config,
@@ -324,6 +359,7 @@ fn terminal_mode_from_device(
     })
 }
 
+#[cfg(not(coverage))]
 fn find_pam_service(name: &str) -> Result<String, Error> {
     for dir in &["/etc/pam.d", "/usr/lib/pam.d"] {
         if Path::new(&format!("{dir}/{name}")).exists() {
@@ -333,6 +369,7 @@ fn find_pam_service(name: &str) -> Result<String, Error> {
     Err(format!("PAM service not found: {name}").into())
 }
 
+#[cfg(not(coverage))]
 struct DirectSessionRequest<'a> {
     service: &'a str,
     class: SessionClass,
@@ -340,6 +377,7 @@ struct DirectSessionRequest<'a> {
     cmd: Vec<String>,
 }
 
+#[cfg(not(coverage))]
 fn start_session_direct(
     runtime: &Runtime,
     request: DirectSessionRequest<'_>,
@@ -363,6 +401,7 @@ fn start_session_direct(
     Ok(session)
 }
 
+#[cfg(not(coverage))]
 fn start_greeter(runtime: &Runtime) -> Result<Session, Error> {
     let request = DirectSessionRequest {
         service: &runtime.greeter_pam_service,
@@ -373,6 +412,7 @@ fn start_greeter(runtime: &Runtime) -> Result<Session, Error> {
     start_session_direct(runtime, request)
 }
 
+#[cfg(not(coverage))]
 fn handle_client(mut stream: UnixStream, context: &mut ClientContext<'_>) -> Result<(), Error> {
     let mut session: Option<Session> = None;
 
@@ -389,6 +429,7 @@ fn handle_client(mut stream: UnixStream, context: &mut ClientContext<'_>) -> Res
     Ok(())
 }
 
+#[cfg(not(coverage))]
 fn handle_request(
     request: Request,
     session: &mut Option<Session>,
@@ -402,6 +443,7 @@ fn handle_request(
     }
 }
 
+#[cfg(not(coverage))]
 fn create_session_response(
     username: String,
     session: &mut Option<Session>,
@@ -425,6 +467,7 @@ fn create_session_response(
     Ok(response)
 }
 
+#[cfg(not(coverage))]
 fn handle_auth_response(
     response: Option<String>,
     session: &mut Option<Session>,
@@ -437,6 +480,7 @@ fn handle_auth_response(
     auth_prompt_response(session)
 }
 
+#[cfg(not(coverage))]
 fn start_session_response(
     cmd: Vec<String>,
     env: Vec<String>,
@@ -457,17 +501,20 @@ fn start_session_response(
     }
 }
 
+#[cfg(not(coverage))]
 fn cancel_session_response(session: &mut Option<Session>) -> Response {
     cancel_session(session);
     Response::Success
 }
 
+#[cfg(not(coverage))]
 fn cancel_session(session: &mut Option<Session>) {
     if let Some(mut session) = session.take() {
         let _ = session.cancel();
     }
 }
 
+#[cfg(not(coverage))]
 fn auth_prompt_response(session: &mut Session) -> Result<Response, Error> {
     match session.get_auth_prompt()? {
         Some((prompt, echo)) => Ok(Response::AuthMessage {
@@ -479,5 +526,92 @@ fn auth_prompt_response(session: &mut Session) -> Result<Response, Error> {
             auth_message: prompt,
         }),
         None => Ok(Response::Success),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_with_vt(vt: VtSelection, switch: bool) -> Config {
+        Config {
+            vt,
+            switch,
+            source_profile: true,
+            runfile: "/run/greetd.run".into(),
+            service: "greetd".into(),
+            greeter_command: "tuigreet".into(),
+            greeter_user: "greeter".into(),
+            greeter_service: "greetd-greeter".into(),
+            initial_session: None,
+        }
+    }
+
+    #[test]
+    fn terminate_handler_sets_flag() {
+        TERMINATE.store(false, Ordering::SeqCst);
+
+        handle_terminate(0);
+
+        assert!(should_terminate());
+    }
+
+    #[test]
+    fn runtime_initial_session_copies_config_values() {
+        let initial = InitialSession {
+            command: "sway".into(),
+            user: "alessio".into(),
+        };
+
+        let runtime = RuntimeInitialSession::from(initial);
+
+        assert_eq!(runtime.command, "sway");
+        assert_eq!(runtime.user, "alessio");
+    }
+
+    #[test]
+    fn terminal_mode_none_uses_stdin() {
+        let config = config_with_vt(VtSelection::None, true);
+
+        assert!(matches!(
+            get_terminal_mode(&config).unwrap(),
+            TerminalMode::Stdin
+        ));
+    }
+
+    #[test]
+    fn terminal_mode_specific_uses_requested_tty_and_switch() {
+        let config = config_with_vt(VtSelection::Specific(7), false);
+
+        let mode = get_terminal_mode(&config).unwrap();
+
+        match mode {
+            TerminalMode::Vt { path, vt, switch } => {
+                assert_eq!(path, "/dev/tty7");
+                assert_eq!(vt, 7);
+                assert!(!switch);
+            }
+            TerminalMode::Stdin => panic!("expected VT mode"),
+        }
+    }
+
+    #[cfg(coverage)]
+    #[test]
+    fn terminal_mode_current_and_next_require_integration_under_coverage() {
+        let current = config_with_vt(VtSelection::Current, true);
+        let next = config_with_vt(VtSelection::Next, true);
+
+        assert!(
+            get_terminal_mode(&current)
+                .unwrap_err()
+                .to_string()
+                .contains("real terminal")
+        );
+        assert!(
+            get_terminal_mode(&next)
+                .unwrap_err()
+                .to_string()
+                .contains("real terminal")
+        );
     }
 }

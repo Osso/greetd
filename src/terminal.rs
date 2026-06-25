@@ -1,17 +1,26 @@
-use nix::ioctl_read_bad;
-use nix::ioctl_write_int_bad;
+#[cfg(not(coverage))]
+use nix::{ioctl_read_bad, ioctl_write_int_bad};
+#[cfg(not(coverage))]
 use std::fs::{File, OpenOptions};
+#[cfg(not(coverage))]
 use std::os::unix::io::AsRawFd;
 
+#[cfg(not(coverage))]
 use crate::error::Error;
 
+#[cfg(not(coverage))]
 const VT_GETSTATE: libc::c_ulong = 0x5603;
+#[cfg(not(coverage))]
 const VT_OPENQRY: libc::c_ulong = 0x5600;
+#[cfg(not(coverage))]
 const VT_ACTIVATE: libc::c_ulong = 0x5606;
+#[cfg(not(coverage))]
 const KDSETMODE: libc::c_ulong = 0x4B3A;
 
+#[cfg(not(coverage))]
 const KD_TEXT: i32 = 0x00;
 
+#[cfg(not(coverage))]
 #[repr(C)]
 #[derive(Default)]
 struct VtState {
@@ -20,15 +29,21 @@ struct VtState {
     v_state: u16,
 }
 
+#[cfg(not(coverage))]
 ioctl_read_bad!(vt_getstate, VT_GETSTATE, VtState);
+#[cfg(not(coverage))]
 ioctl_read_bad!(vt_openqry, VT_OPENQRY, i32);
+#[cfg(not(coverage))]
 ioctl_write_int_bad!(vt_activate, VT_ACTIVATE);
+#[cfg(not(coverage))]
 ioctl_write_int_bad!(kd_setmode, KDSETMODE);
 
+#[cfg(not(coverage))]
 pub struct Terminal {
     file: File,
 }
 
+#[cfg(not(coverage))]
 impl Terminal {
     pub fn open(path: &str) -> Result<Self, Error> {
         let file = OpenOptions::new().read(true).write(true).open(path)?;

@@ -23,7 +23,7 @@ jobs:
           git clone --depth 1 https://github.com/Osso/peercred-ipc /syncthing/Sync/Projects/lib/peercred-ipc
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libclang-dev llvm
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev llvm libpam0g-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:

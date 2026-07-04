@@ -22,6 +22,9 @@ jobs:
           git clone --depth 1 https://github.com/Osso/keyring-rs /syncthing/Sync/Projects/system/keyring-rs
           git clone --depth 1 https://github.com/Osso/peercred-ipc /syncthing/Sync/Projects/lib/peercred-ipc
 
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev llvm
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
